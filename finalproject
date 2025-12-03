@@ -1,0 +1,5 @@
+#Load Libraries IF THEY DONT LOAD IN MODULE you need to use *pip import* into the command terminal to load libraries into your computer  
+import pandas as pd
+import geopandas as gpd
+import  folium as fm
+import seaborn as sb
