@@ -1,5 +1,4 @@
 # Load Libraries
-# NOTE: If running locally, ensure you have: pip install pandas geopandas matplotlib seaborn
 import pandas as pd
 import geopandas as gpd
 import matplotlib.pyplot as plt
@@ -12,15 +11,10 @@ SQ_M_TO_SQ_MI = 2589988.11
 # Define an equal-area CRS (Albers Equal Area Conic) for accurate area calculation
 ALBERS_CRS = 'EPSG:5070' 
 
-# =========================================================================
-# 1. DATA LOADING AND INITIAL PREPARATION
-# =========================================================================
-
 try:
-    # --- IMPORTANT: UPDATE THESE PATHS TO YOUR LOCAL FILES ---
+
     kt_df = pd.read_csv('E:/Python/ProjectDS150/kwiktrip.csv')
     pop_df = pd.read_csv('E:/Python/ProjectDS150/wisconsin_population_density_2020.csv')
-    # --- END OF LOCAL FILE PATHS ---
 
     # Load County Geometries from the Census URL
     counties_url = "https://www2.census.gov/geo/tiger/GENZ2021/shp/cb_2021_us_county_20m.zip"
@@ -47,31 +41,19 @@ except Exception as e:
     print(f"Error loading or preparing data: {e}")
     sys.exit(1)
 
-
-# =========================================================================
-# 2. CALCULATE DENSITIES FOR CORRELATION ANALYSIS
-# =========================================================================
-
-# --- Filter out Milwaukee County as an Outlier (High Density) ---
 MILWAUKEE_COUNTY_NAME = 'Milwaukee'
 wi_counties = wi_counties[wi_counties['NAME'] != MILWAUKEE_COUNTY_NAME].copy()
-
-# --- 2a. Calculate County Area (Required for Kwik Trip Density) ---
 # Project to an equal-area CRS for accurate area calculation
 wi_counties_proj = wi_counties.to_crs(ALBERS_CRS) 
 wi_counties['Area_sq_meters'] = wi_counties_proj.geometry.area
 wi_counties['Area_sq_miles'] = wi_counties['Area_sq_meters'] / SQ_M_TO_SQ_MI
 
-
-# --- 2b. Count Kwik Trip Stores per County ---
 # Spatial join to link each store to its county's name
 kt_county_join = gpd.sjoin(kt_gdf, wi_counties[['NAME', 'geometry']], how='inner', predicate='intersects')
 
 # Group by county name and count the stores
 kt_counts = kt_county_join.groupby('NAME').size().reset_index(name='KwikTrip_Count')
 
-
-# --- 2c. Merge and Finalize Correlation Data ---
 # Select core columns from the geographical data
 correlation_df = wi_counties[['NAME', 'Population_Density_PerSqMile', 'Area_sq_miles']].copy()
 
@@ -88,11 +70,6 @@ correlation_df['KwikTrip_Density_PerSqMi'] = (
 correlation_value = correlation_df['Population_Density_PerSqMile'].corr(
     correlation_df['KwikTrip_Density_PerSqMi']
 )
-
-
-# =========================================================================
-# 3. VISUALIZE CORRELATION (Scatter Plot with Regression Line)
-# =========================================================================
 
 plt.figure(figsize=(10, 7))
 
@@ -118,4 +95,5 @@ plt.tight_layout()
 
 correlation_file = "wi_density_correlation_plot_no_milwaukee.png"
 plt.savefig(correlation_file)
+
 print(f"Correlation plot successfully generated and saved to {correlation_file}")
