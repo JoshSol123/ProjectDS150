@@ -1,117 +1,155 @@
-#Load Libraries IF THEY DONT LOAD IN MODULE you need to use *pip import* into the command terminal to load libraries into your computer  
+# Load Libraries
+# NOTE: If you are running this locally, ensure you have these libraries installed:
+# pip install pandas geopandas matplotlib
 import pandas as pd
 import geopandas as gpd
-import  folium
-import seaborn as sb
 import matplotlib.pyplot as plt
-from folium.features import GeoJsonTooltip
+import os
+import sys
 
+# =========================================================================
+# 1. DATA LOADING AND INITIAL PREPARATION
+# =========================================================================
+
+# --- IMPORTANT: UPDATE THESE PATHS TO YOUR LOCAL FILES ---
+# Use your exact local file paths here for kt_df and pop_df
 kt_df = pd.read_csv('E:/Python/ProjectDS150/kwiktrip.csv')
-
 pop_df = pd.read_csv('E:/Python/ProjectDS150/wisconsin_population_density_2020.csv')
+# --- END OF LOCAL FILE PATHS ---
 
-#All Counties url
+# Load County Geometries from the Census URL
 counties_url = "https://www2.census.gov/geo/tiger/GENZ2021/shp/cb_2021_us_county_20m.zip"
-#Read the file through Geopandas
 gdf_counties = gpd.read_file(counties_url)
-#To get specifically wisconsin, I needed  to get the fips number which is 55 and filter to only wisconsin
+
+# Filter for Wisconsin only (STATEFP == '55')
 wi_counties = gdf_counties[gdf_counties['STATEFP'] == '55'].copy()
 
-#This is connecting the county shape data to the population data by county NAME and County on Pop_df
+# Merge county shapes with population density data
 wi_counties = wi_counties.merge(pop_df, left_on='NAME', right_on='County', how='left')
-#There shouldn't be any but needed to fill any missing data values to zero as the map wasnt working without it
+# Fill missing data (e.g., counties with no density data) with 0
 wi_counties['Population_Density_PerSqMile'] = wi_counties['Population_Density_PerSqMile'].fillna(0)
 
-# Convert Kwik Trip data to a GeoDataFrame
+# Convert Kwik Trip DataFrame to GeoDataFrame
 kt_gdf = gpd.GeoDataFrame(
     kt_df, 
     geometry=gpd.points_from_xy(kt_df.Longitude, kt_df.Latitude),
     crs="EPSG:4326" # Standard WGS84 Coordinate System
 )
 
+# Set Coordinate Reference System (CRS) consistency
 wi_counties = wi_counties.to_crs(kt_gdf.crs)
+
+# FIRST FILTER: Spatially join Kwik Trip points to Wisconsin counties 
+# This ensures that ALL plotted points are within the state boundaries.
 kt_gdf_wi_only = gpd.sjoin(kt_gdf, wi_counties[['geometry']], how='inner', predicate='intersects')
 
-m = folium.Map(location=[44.5, -89.5], zoom_start=7, tiles='CartoDB Positron')
 
-# Create a simplified Pandas DataFrame containing only the data columns needed for the tooltip
-# The GeoJsonTooltip object expects a simple dictionary/list structure for its data parameter.
-# By creating a dictionary from the relevant columns, we ensure it's JSON serializable.
-density_data_dict = wi_counties[['NAME', 'Population_Density_PerSqMile']].set_index('NAME').to_dict()['Population_Density_PerSqMile']
+# =========================================================================
+# 2. FILTER OUT DANE COUNTY (FOR THE FIRST PLOT)
+# =========================================================================
+
+DANE_COUNTY_FIPS = '025'
+
+# 2a. Filter County Shapes for Choropleth (Excluding Dane County polygon)
+wi_counties_filtered = wi_counties[wi_counties['COUNTYFP'] != DANE_COUNTY_FIPS].copy()
+
+# 2b. Filter Kwik Trip Points (Excluding locations in Dane County)
+# 1. Get the geometry of Dane County
+dane_geom = wi_counties[wi_counties['COUNTYFP'] == DANE_COUNTY_FIPS]['geometry'].iloc[0]
+
+# 2. Filter out Kwik Trip locations that are within Dane County geometry, using the already filtered WI data
+kt_gdf_filtered = kt_gdf_wi_only[~kt_gdf_wi_only.within(dane_geom)].copy()
 
 
-# A. Base Layer: Population Density Choropleth
-# This colors the county polygons.
+# =========================================================================
+# 3. GENERATE STATIC GEOGRAPHICAL PLOT (PNG) - EXCLUDING DANE COUNTY
+# =========================================================================
 
-# Create the Choropleth layer
-choropleth = folium.Choropleth(
-    # NOTE: geo_data should be the GeoJSON geometry source (wi_counties)
-    geo_data=wi_counties, 
-    name='Population Density Choropleth',
-    # NOTE: data should be the simple mapping of ID (County Name) to Value (Density)
-    data=wi_counties,
-    columns=['NAME', 'Population_Density_PerSqMile'],
-    key_on='feature.properties.NAME',
-    fill_color='YlOrRd', # Yellow -> Orange -> Red (Red = High Density)
-    fill_opacity=0.7,
-    line_opacity=0.3,
-    legend_name='Population Density (Per Sq Mile) - 2020 Census',
-    highlight=True # Highlight county on hover
-).add_to(m)
+fig, ax = plt.subplots(1, 1, figsize=(12, 12))
 
-# Add an interactive tooltip to display the county name and density on hover
-# Crucial Fix: We pass only the necessary column names to GeoJsonTooltip 
-# and let Folium handle the mapping to the GeoJSON features.
-choropleth.geojson.add_child(
-    GeoJsonTooltip(
-        fields=['NAME', 'Population_Density_PerSqMile'],
-        aliases=['County:', 'Density (per sq mi):'],
-        localize=True,
-        sticky=False,
-        labels=True,
-        style="""
-            background-color: #F0EFEF;
-            border: 2px solid grey;
-            border-radius: 3px;
-            box-shadow: 3px;
-        """
-    )
+# 3a. Choropleth Map (Population Density) - Uses FILTERED counties
+wi_counties_filtered.plot(
+    column='Population_Density_PerSqMile',
+    cmap='YlOrRd', 
+    legend=True,
+    legend_kwds={
+        'label': "Population Density (Per Sq Mile) - Excl. Dane Co.",
+        'orientation': "horizontal", 
+        'shrink': 0.5, 
+        'pad': 0.05,
+        'format': "%.0f"
+    },
+    ax=ax,
+    edgecolor='black',
+    linewidth=0.5
 )
 
-# B. Overlay Layer: Individual Kwik Trip Stores as Points
-# We iterate through the Kwik Trip GeoDataFrame (kt_gdf) and add a marker for each store.
-kt_group = folium.FeatureGroup(name='Kwik Trip Store Locations').add_to(m)
+# 3b. Scatter Plot of Kwik Trip Locations (Overlay) - Uses FILTERED KTs
+kt_gdf_filtered.plot(
+    marker='o', 
+    color='#03A9F4', 
+    markersize=15, 
+    ax=ax,
+    zorder=2 
+)
 
-for idx, row in kt_gdf_wi_only.iterrows():
-    folium.CircleMarker(
-        location=[row['Latitude'], row['Longitude']],
-        radius=3, 
-        color='#03A9F4', 
-        fill=True,
-        fill_color='#03A9F4',
-        fill_opacity=1.0,
-        popup=f"Kwik Trip Store: {row.get('Address', 'Location Details')}" 
-    ).add_to(kt_group)
+# Set map boundaries to exclude Dane county's influence
+minx, miny, maxx, maxy = wi_counties_filtered.total_bounds
+ax.set_xlim(minx - 0.5, maxx + 0.5)
+ax.set_ylim(miny - 0.5, maxy + 0.5)
 
-
-
-# C. Add Controls and Save
-
-# Add layer control so you can toggle the layers (density map and store points)
-folium.LayerControl().add_to(m)
-
-# Save the map as an interactive HTML file
-output_file = "wisconsin_kwik_trip_density_map.html"
-m.save(output_file)
-
-#For histogram comparing pop density to counties. 
-plt.figure(figsize=(10, 6))
-
-sb.histplot(pop_df['Population_Density_PerSqMile'], bins=20, kde=True, color='skyblue', edgecolor='black')
-plt.title('Distribution of Population Density in Wisconsin Counties (2020)')
-plt.xlabel('Population Density (People per Sq Mile)')
-plt.ylabel('Number of Counties')
-plt.grid(axis='y', alpha=0.5)
+# Final plot formatting
+ax.set_title('Wisconsin Population Density and Kwik Trip Locations (Excluding Madison/Dane Co.)', fontsize=16)
+ax.set_axis_off() 
 plt.tight_layout()
-plt.savefig("wisconsin_density_histogram.png")
 
+map_file = "wisconsin_density_kt_scatter_no_madison_final.png"
+plt.savefig(map_file, dpi=300)
+print(f"Map (Excluding Dane Co.) successfully generated and saved to {map_file}")
+
+
+# =========================================================================
+# 4. GENERATE STATIC GEOGRAPHICAL PLOT (PNG) - FULL WISCONSIN PICTURE
+# =========================================================================
+
+fig_full, ax_full = plt.subplots(1, 1, figsize=(12, 12))
+
+# 4a. Choropleth Map (Population Density) - Uses ORIGINAL wi_counties data
+wi_counties.plot(
+    column='Population_Density_PerSqMile',
+    cmap='YlOrRd', 
+    legend=True,
+    legend_kwds={
+        'label': "Population Density (Per Sq Mile) - Including Dane Co.",
+        'orientation': "horizontal", 
+        'shrink': 0.5, 
+        'pad': 0.05,
+        'format': "%.0f"
+    },
+    ax=ax_full,
+    edgecolor='black',
+    linewidth=0.5
+)
+
+# 4b. Scatter Plot of Kwik Trip Locations (Overlay) - Uses ORIGINAL kt_gdf_wi_only data
+kt_gdf_wi_only.plot(
+    marker='o', 
+    color='#03A9F4', 
+    markersize=15, 
+    ax=ax_full,
+    zorder=2 
+)
+
+# Set map boundaries to full Wisconsin extent
+minx, miny, maxx, maxy = wi_counties.total_bounds
+ax_full.set_xlim(minx - 0.5, maxx + 0.5)
+ax_full.set_ylim(miny - 0.5, maxy + 0.5)
+
+# Final plot formatting
+ax_full.set_title('Wisconsin Population Density and Kwik Trip Locations (FULL Map)', fontsize=16)
+ax_full.set_axis_off() 
+plt.tight_layout()
+
+map_file_full = "wisconsin_density_kt_scatter_full.png"
+plt.savefig(map_file_full, dpi=300)
+print(f"Map (Full Wisconsin) successfully generated and saved to {map_file_full}")
