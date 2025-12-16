@@ -7,26 +7,23 @@ import matplotlib.pyplot as plt
 import os
 import sys
 
-# =========================================================================
 # 1. DATA LOADING AND INITIAL PREPARATION
-# =========================================================================
 
-# --- IMPORTANT: UPDATE THESE PATHS TO YOUR LOCAL FILES ---
+#IMPORTANT: UPDATE THESE PATHS TO YOUR LOCAL FILES 
 # Use your exact local file paths here for kt_df and pop_df
 kt_df = pd.read_csv('E:/Python/ProjectDS150/kwiktrip.csv')
 pop_df = pd.read_csv('E:/Python/ProjectDS150/wisconsin_population_density_2020.csv')
-# --- END OF LOCAL FILE PATHS ---
 
 # Load County Geometries from the Census URL
 counties_url = "https://www2.census.gov/geo/tiger/GENZ2021/shp/cb_2021_us_county_20m.zip"
 gdf_counties = gpd.read_file(counties_url)
 
-# Filter for Wisconsin only (STATEFP == '55')
+# Filter for Wisconsin only WI state Fips is 55
 wi_counties = gdf_counties[gdf_counties['STATEFP'] == '55'].copy()
 
 # Merge county shapes with population density data
 wi_counties = wi_counties.merge(pop_df, left_on='NAME', right_on='County', how='left')
-# Fill missing data (e.g., counties with no density data) with 0
+# Fill missing data with 0
 wi_counties['Population_Density_PerSqMile'] = wi_counties['Population_Density_PerSqMile'].fillna(0)
 
 # Convert Kwik Trip DataFrame to GeoDataFrame
@@ -36,7 +33,7 @@ kt_gdf = gpd.GeoDataFrame(
     crs="EPSG:4326" # Standard WGS84 Coordinate System
 )
 
-# Set Coordinate Reference System (CRS) consistency
+# Set Coordinate Reference System (CRS)
 wi_counties = wi_counties.to_crs(kt_gdf.crs)
 
 # FIRST FILTER: Spatially join Kwik Trip points to Wisconsin counties 
@@ -44,9 +41,8 @@ wi_counties = wi_counties.to_crs(kt_gdf.crs)
 kt_gdf_wi_only = gpd.sjoin(kt_gdf, wi_counties[['geometry']], how='inner', predicate='intersects')
 
 
-# =========================================================================
 # 2. FILTER OUT DANE COUNTY (FOR THE FIRST PLOT)
-# =========================================================================
+
 
 DANE_COUNTY_FIPS = '025'
 
@@ -61,9 +57,8 @@ dane_geom = wi_counties[wi_counties['COUNTYFP'] == DANE_COUNTY_FIPS]['geometry']
 kt_gdf_filtered = kt_gdf_wi_only[~kt_gdf_wi_only.within(dane_geom)].copy()
 
 
-# =========================================================================
-# 3. GENERATE STATIC GEOGRAPHICAL PLOT (PNG) - EXCLUDING DANE COUNTY
-# =========================================================================
+# 3. GENERATE STATIC GEOGRAPHICAL PLOT EXCLUDING DANE COUNTY
+
 
 fig, ax = plt.subplots(1, 1, figsize=(12, 12))
 
@@ -108,13 +103,11 @@ plt.savefig(map_file, dpi=300)
 print(f"Map (Excluding Dane Co.) successfully generated and saved to {map_file}")
 
 
-# =========================================================================
-# 4. GENERATE STATIC GEOGRAPHICAL PLOT (PNG) - FULL WISCONSIN PICTURE
-# =========================================================================
+# 4. GENERATE STATIC GEOGRAPHICAL PLOT FULL WISCONSIN PICTURE
 
 fig_full, ax_full = plt.subplots(1, 1, figsize=(12, 12))
 
-# 4a. Choropleth Map (Population Density) - Uses ORIGINAL wi_counties data
+# 4a. Choropleth Map Uses ORIGINAL wi_counties data
 wi_counties.plot(
     column='Population_Density_PerSqMile',
     cmap='YlOrRd', 
@@ -131,7 +124,7 @@ wi_counties.plot(
     linewidth=0.5
 )
 
-# 4b. Scatter Plot of Kwik Trip Locations (Overlay) - Uses ORIGINAL kt_gdf_wi_only data
+# 4b. Scatter Plot of Kwik Trip Locations Uses ORIGINAL kt_gdf_wi_only data
 kt_gdf_wi_only.plot(
     marker='o', 
     color='#03A9F4', 
@@ -144,12 +137,11 @@ kt_gdf_wi_only.plot(
 minx, miny, maxx, maxy = wi_counties.total_bounds
 ax_full.set_xlim(minx - 0.5, maxx + 0.5)
 ax_full.set_ylim(miny - 0.5, maxy + 0.5)
-
-# Final plot formatting
 ax_full.set_title('Wisconsin Population Density and Kwik Trip Locations (FULL Map)', fontsize=16)
 ax_full.set_axis_off() 
 plt.tight_layout()
 
+#Saving and making sure it generates 
 map_file_full = "wisconsin_density_kt_scatter_full.png"
 plt.savefig(map_file_full, dpi=300)
 print(f"Map (Full Wisconsin) successfully generated and saved to {map_file_full}")
