@@ -40,68 +40,17 @@ wi_counties = wi_counties.to_crs(kt_gdf.crs)
 # This ensures that ALL plotted points are within the state boundaries.
 kt_gdf_wi_only = gpd.sjoin(kt_gdf, wi_counties[['geometry']], how='inner', predicate='intersects')
 
-
-# 2. FILTER OUT DANE COUNTY (FOR THE FIRST PLOT)
-
-
 DANE_COUNTY_FIPS = '025'
 
-# 2a. Filter County Shapes for Choropleth (Excluding Dane County polygon)
+# Filter County Shapes for Choropleth (Excluding Dane County polygon)
 wi_counties_filtered = wi_counties[wi_counties['COUNTYFP'] != DANE_COUNTY_FIPS].copy()
 
-# 2b. Filter Kwik Trip Points (Excluding locations in Dane County)
+# Filter Kwik Trip Points (Excluding locations in Dane County)
 # 1. Get the geometry of Dane County
 dane_geom = wi_counties[wi_counties['COUNTYFP'] == DANE_COUNTY_FIPS]['geometry'].iloc[0]
 
 # 2. Filter out Kwik Trip locations that are within Dane County geometry, using the already filtered WI data
 kt_gdf_filtered = kt_gdf_wi_only[~kt_gdf_wi_only.within(dane_geom)].copy()
-
-
-# 3. GENERATE STATIC GEOGRAPHICAL PLOT EXCLUDING DANE COUNTY
-
-
-fig, ax = plt.subplots(1, 1, figsize=(12, 12))
-
-# 3a. Choropleth Map (Population Density) - Uses FILTERED counties
-wi_counties_filtered.plot(
-    column='Population_Density_PerSqMile',
-    cmap='YlOrRd', 
-    legend=True,
-    legend_kwds={
-        'label': "Population Density (Per Sq Mile) - Excl. Dane Co.",
-        'orientation': "horizontal", 
-        'shrink': 0.5, 
-        'pad': 0.05,
-        'format': "%.0f"
-    },
-    ax=ax,
-    edgecolor='black',
-    linewidth=0.5
-)
-
-# 3b. Scatter Plot of Kwik Trip Locations (Overlay) - Uses FILTERED KTs
-kt_gdf_filtered.plot(
-    marker='o', 
-    color='#03A9F4', 
-    markersize=15, 
-    ax=ax,
-    zorder=2 
-)
-
-# Set map boundaries to exclude Dane county's influence
-minx, miny, maxx, maxy = wi_counties_filtered.total_bounds
-ax.set_xlim(minx - 0.5, maxx + 0.5)
-ax.set_ylim(miny - 0.5, maxy + 0.5)
-
-# Final plot formatting
-ax.set_title('Wisconsin Population Density and Kwik Trip Locations (Excluding Madison/Dane Co.)', fontsize=16)
-ax.set_axis_off() 
-plt.tight_layout()
-
-map_file = "wisconsin_density_kt_scatter_no_madison_final.png"
-plt.savefig(map_file, dpi=300)
-print(f"Map (Excluding Dane Co.) successfully generated and saved to {map_file}")
-
 
 # 4. GENERATE STATIC GEOGRAPHICAL PLOT FULL WISCONSIN PICTURE
 
@@ -113,7 +62,7 @@ wi_counties.plot(
     cmap='YlOrRd', 
     legend=True,
     legend_kwds={
-        'label': "Population Density (Per Sq Mile) - Including Dane Co.",
+        'label': "Population Density (Per Sq Mile)",
         'orientation': "horizontal", 
         'shrink': 0.5, 
         'pad': 0.05,
@@ -144,4 +93,5 @@ plt.tight_layout()
 #Saving and making sure it generates 
 map_file_full = "wisconsin_density_kt_scatter_full.png"
 plt.savefig(map_file_full, dpi=300)
+
 print(f"Map (Full Wisconsin) successfully generated and saved to {map_file_full}")
