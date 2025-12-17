@@ -4,8 +4,6 @@
 import pandas as pd
 import geopandas as gpd
 import matplotlib.pyplot as plt
-import os
-import sys
 
 # 1. DATA LOADING AND INITIAL PREPARATION
 
@@ -95,3 +93,4 @@ map_file_full = "wisconsin_density_kt_scatter_full.png"
 plt.savefig(map_file_full, dpi=300)
 
 print(f"Map (Full Wisconsin) successfully generated and saved to {map_file_full}")
+
