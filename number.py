@@ -3,8 +3,6 @@ import pandas as pd
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import seaborn as sb
-import sys
-import os
 
 # Define constant for square meters to square miles conversion
 SQ_M_TO_SQ_MI = 2589988.11
@@ -90,4 +88,5 @@ correlation_file = "wi_density_correlation_plot_no_milwaukee.png"
 plt.savefig(correlation_file)
 
 print(f"Correlation plot successfully generated and saved to {correlation_file}")
+
 
