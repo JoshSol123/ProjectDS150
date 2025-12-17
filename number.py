@@ -10,9 +10,6 @@ import os
 SQ_M_TO_SQ_MI = 2589988.11
 # Define an equal-area CRS (Albers Equal Area Conic) for accurate area calculation
 ALBERS_CRS = 'EPSG:5070' 
-
-try:
-
     kt_df = pd.read_csv('E:/Python/ProjectDS150/kwiktrip.csv')
     pop_df = pd.read_csv('E:/Python/ProjectDS150/wisconsin_population_density_2020.csv')
 
@@ -34,12 +31,8 @@ try:
         crs="EPSG:4326" # Standard WGS84 Coordinate System
     )
 
-    # Ensure county geometry is in the same CRS as the points for spatial join
-    wi_counties = wi_counties.to_crs(kt_gdf.crs)
-
-except Exception as e:
-    print(f"Error loading or preparing data: {e}")
-    sys.exit(1)
+# Ensure county geometry is in the same CRS as the points for spatial join
+wi_counties = wi_counties.to_crs(kt_gdf.crs)
 
 MILWAUKEE_COUNTY_NAME = 'Milwaukee'
 wi_counties = wi_counties[wi_counties['NAME'] != MILWAUKEE_COUNTY_NAME].copy()
@@ -97,3 +90,4 @@ correlation_file = "wi_density_correlation_plot_no_milwaukee.png"
 plt.savefig(correlation_file)
 
 print(f"Correlation plot successfully generated and saved to {correlation_file}")
+
